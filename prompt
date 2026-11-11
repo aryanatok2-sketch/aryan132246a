@@ -1,0 +1,1242 @@
+# MASTER PROJECT GOAL & NEW ARCHITECTURE DESIGN DIRECTIVE
+## Institutional-Grade 0s–60s Barcode Bi-Directional HFT & Micro-Range Trading System — Rust
+### Target Exchanges: Binance USDⓈ-M | Bybit V5 Linear | BingX Swap V2 | MEXC Futures V1
+
+# PART 1 — FINAL ENHANCED PROJECT GOAL
+
+## 1. PROJECT MISSION AND FINAL OBJECTIVE
+
+The objective is to design and ultimately build a complete, genuinely production-ready, institutional-grade High-Frequency Trading (HFT) and Micro-Range Scalping System entirely in Rust.
+
+The system must identify, analyze, and trade the user's specific horizontal Barcode market structure across multiple timeframes from 1 second to 60 seconds.
+
+The system must operate through four target exchanges:
+
+1. Binance USDⓈ-M Futures.
+2. Bybit V5 Linear Futures.
+3. BingX Swap V2.
+4. MEXC Futures V1.
+
+This is not an ordinary directional trading bot. Its defining strategy is continuous, bi-directional, Hedge Mode ping-pong execution inside mathematically identified barcode ranges.
+
+The final objective is an end-to-end working system, not a demonstration, conceptual prototype, basic template, simulation-only implementation, or collection of disconnected modules.
+
+The project must retain the entire trading strategy, mathematical conditions, execution behavior, hardware objectives, and exchange requirements specified below.
+
+---
+
+## 2. CORE TRADING IDEA — PRICE-AGNOSTIC BARCODE DETECTION
+
+### 2.1 Nominal Coin Price Must Not Determine Eligibility
+
+The bot must not reject a coin simply because its nominal dollar price is high or low.
+
+Examples include:
+
+- $0.05
+- $0.1428
+- $0.5935
+- $10
+- $100
+- $500+
+
+The actual trading opportunity is the percentage movement between the barcode's floor and ceiling.
+
+The primary calculation is:
+
+\[
+\text{BoxBounce} =
+\frac{P_{\text{ceiling}}-P_{\text{floor}}}
+{P_{\text{floor}}}\times100
+\]
+
+The target movement range is:
+
+\[
+0.08\% \leq \text{BoxBounce} \leq 0.50\%
+\]
+
+The preferred movement range is 0.10%–0.50%.
+
+Every instrument must be evaluated using its actual exchange-native `tick_size`, rather than nominal dollar-price comparisons.
+
+### 2.2 Dynamic Maximum Supported Leverage
+
+At startup, the bot must query each instrument's maximum supported leverage.
+
+The requested leverage selection is:
+
+\[
+L_{\text{active}}=\min(100x,L_{\text{coin maximum}})
+\]
+
+The supported leverage examples are:
+
+- 30x
+- 50x
+- 75x
+- 100x
+
+The bot must configure Isolated Margin and Hedge Mode.
+
+The original goal's expected ROE examples must be retained and mathematically verified during architecture design. They must not be silently replaced with different assumptions.
+
+---
+
+## 3. MULTI-TIMEFRAME BARCODE DETECTION — 1s TO 60s
+
+The bot must not be restricted to a conventional 1-second chart.
+
+It must identify barcode behavior across all the following requested cycles:
+
+| Timeframe | Required capability |
+|---|---|
+| 1 second | Detect and trade |
+| 3 seconds | Detect and trade |
+| 5 seconds | Detect and trade |
+| 10 seconds | Detect and trade |
+| 15 seconds | Detect and trade |
+| 20 seconds | Detect and trade |
+| 30 seconds | Detect and trade |
+| 60 seconds | Detect and trade |
+
+The scanner must continuously recognize barcode movements occurring at different rhythms between 0 and 60 seconds.
+
+### Time-Gap Advantage
+
+Longer cycles, particularly 5–60 seconds, are intended to provide more time for resting Maker orders to reach execution.
+
+The bot should evaluate this advantage when ranking opportunities.
+
+However, the design must distinguish the intended time-gap advantage from a guaranteed fill or guaranteed elimination of network latency.
+
+---
+
+## 4. EXACT BARCODE GEOMETRY — FIVE REQUIRED SIGNATURES
+
+The scanner must distinguish genuine barcode structures from ordinary sideways movement.
+
+An ordinary sideways market must not automatically qualify as a barcode.
+
+All five signatures below must be represented.
+
+### Signature 1 — Full-Body Parallel Candles
+
+The candles should resemble Marubozu-style solid rectangular blocks with minimal or zero wicks.
+
+Required body ratio:
+
+\[
+\frac{|Close-Open|}{High-Low}\geq0.85
+\]
+
+The barcode geometry must identify:
+
+- Green candle Open corresponding to the Red candle Close at the Box Floor.
+- Green candle Close corresponding to the Red candle Open at the Box Ceiling.
+- Repeated horizontal rectangular movement between both edges.
+
+### Signature 2 — Green/Red Symmetry
+
+The rolling window must contain balanced Green and Red candles.
+
+Required symmetry:
+
+\[
+S=\frac{\min(Green,Red)}{\max(Green,Red)}
+\geq0.60
+\]
+
+Both candle-count balance and volume consistency must be considered as described in the original strategy.
+
+Do not invent an additional numerical volume threshold where the original goal has not specified one.
+
+### Signature 3 — Mish-Mash and Flat-Candle Tolerance
+
+The scanner must tolerate normal market irregularities, including:
+
+- Two to five consecutive flat candles.
+- Two to three consecutive candles of the same color.
+- Temporary one-tick dips outside the box.
+- Small temporary movements followed by a return to the original barcode.
+
+The required detection mechanism is:
+
+**Markov Non-Flat Transition Probability ≥ 75%.**
+
+The mechanism must identify genuine floor-to-ceiling and ceiling-to-floor alternation without incorrectly classifying every temporary disturbance as a breakout.
+
+### Signature 4 — EMA7 and EMA30 Compression
+
+Both moving averages must remain relatively flat and close together inside the barcode.
+
+Required condition:
+
+\[
+|EMA7-EMA30|\leq0.5\times BoxWidth
+\]
+
+### Signature 5 — Rhythmic Volume Consistency
+
+Volume must be steady and sufficiently continuous.
+
+The scanner must reject dead or zero-volume instruments.
+
+Minimum 24-hour USDT volume:
+
+\[
+Volume_{24h}\geq \$2,000,000
+\]
+
+---
+
+## 5. CONTINUOUS BI-DIRECTIONAL PING-PONG ENGINE
+
+The core execution engine must operate in Hedge Mode with independent LONG and SHORT positions.
+
+The objective is continuous two-directional trading, not one-way directional trading.
+
+### 5.1 Box Floor Execution
+
+Example:
+
+\[
+Floor=0.2222,\quad Ceiling=0.2224
+\]
+
+When price returns to the Box Floor:
+
+1. Close an existing Short entered from the upper edge using a profitable Maker Buy TP.
+2. Open a new Long at the same Box Floor using a Maker Buy Entry.
+3. Maintain the corresponding position and execution state.
+4. Continue the ping-pong cycle.
+
+### 5.2 Box Ceiling Execution
+
+When price returns to the Box Ceiling:
+
+1. Close an existing Long entered from the lower edge using a profitable Maker Sell TP.
+2. Open a new Short at the same Box Ceiling using a Maker Sell Entry.
+3. Maintain the corresponding position and execution state.
+4. Continue the ping-pong cycle.
+
+The intended behavior is that upward movement captures Long profit and downward movement captures Short profit.
+
+Both position slots must be tracked independently.
+
+---
+
+## 6. FOUR CRITICAL EXECUTION PROBLEMS AND THEIR MATHEMATICAL SOLUTIONS
+
+These four areas are mandatory parts of the original strategy.
+
+### PROBLEM 1 — Spread and Market-Order Execution Trap
+
+A chart price does not guarantee execution at that exact price.
+
+For example, a displayed price of 0.2222 may have an Ask of 0.2224.
+
+A market buy can therefore execute at a less favorable price, while taker fees further reduce profitability.
+
+**Mandatory normal-execution rule:**
+
+All normal Entries and normal Take-Profit orders must use Post-Only Maker Limit Orders.
+
+Exchange-specific instructions:
+
+| Exchange | Maker instruction |
+|---|---|
+| Binance | GTX |
+| Bybit | PostOnly |
+| BingX | PostOnly |
+| MEXC | type: 2 |
+
+Emergency IOC executions explicitly specified elsewhere in this goal remain permitted exceptions.
+
+Normal Maker execution must be designed to avoid accidentally crossing the spread and becoming a taker order.
+
+### PROBLEM 2 — Four-Stage Entry, Queue, Capture and Exit Mathematics
+
+Every trade must pass through four defined stages.
+
+#### Stage 1 — Pre-Entry Confirmation
+
+An entry order must only be submitted when:
+
+1. The coin has an active Barcode Score.
+2. Green/Red Balance is at least 0.60.
+3. EMA7 and EMA30 satisfy the compression requirement.
+4. The target-level order-book wall satisfies:
+
+\[
+WallVolume\geq0.35\times RollingAverageWall
+\]
+
+5. Step-breakout score remains in the safe zone:
+
+\[
+|Z_{\text{shift}}|<1.15
+\]
+
+#### Stage 2 — Queue Position and Execution Timing
+
+When placing a Limit Order, record the estimated volume ahead of the bot:
+
+\[
+q_{\text{ahead}}
+\]
+
+Update queue position using executed trade volume and the specified non-uniform cancellation hazard:
+
+\[
+q_{\text{ahead}}(t)=
+q_{\text{ahead}}(t-1)
+-trade\_vol
+-cancel\_vol
+\left(
+\frac{q_{\text{ahead}}}{total\_wall\_vol}
+\right)^{2.4}
+\]
+
+The required power-law hazard parameter is:
+
+\[
+\eta=2.4
+\]
+
+Expected Fill Time:
+
+\[
+T_{\text{ETA}}=
+\frac{q_{\text{ahead}}}
+{EMA(depletion\_rate)}
+\]
+
+The requested queue-hold condition is:
+
+\[
+T_{\text{ETA}}\leq0.6\times T_{\text{cycle}}
+\]
+
+Original examples:
+
+- 1-second barcode: T_ETA ≤ 2.5 seconds.
+- 20-second barcode: T_ETA ≤ 12 seconds.
+
+These examples must be preserved and examined for mathematical consistency during architecture development.
+
+**Last-Man-Standing Adverse Selection Cancellation**
+
+The bot must identify situations in which its order is approaching execution while the supporting order-book wall is disappearing.
+
+Required warning conditions include:
+
+- Queue ahead approaching zero.
+- The specified support-wall disappearance condition of 75% or more.
+- The original ratio condition `q_ahead / total_wall > 0.82`.
+- Opposing market pressure approximately four times stronger.
+
+The requested response is cancellation before adverse execution, with a target internal cancellation response below 500 microseconds.
+
+The architecture must explicitly examine whether public L2 and trade data can support this queue estimate reliably.
+
+#### Stage 3 — Fill Detection and Immediate Profit Capture
+
+When the private WebSocket reports a fill:
+
+1. Identify the actual filled side and quantity.
+2. Identify the exact fill price.
+3. Update the internal position state.
+4. Prepare the opposing-edge Take-Profit order.
+5. Use Reduce-Only Post-Only execution where supported.
+
+The requested internal processing target is below 15 nanoseconds for the internal patching operation.
+
+The architecture must separately specify local processing time and actual exchange order-submission latency.
+
+#### Stage 4 — Profit Exit and Flat-Candle Bailout
+
+**Normal Exit**
+
+When price reaches the opposing barcode edge, the corresponding Maker TP should close the position and capture the intended profit.
+
+**Flat-Candle Stagnation Exit**
+
+When a position remains stagnant for:
+
+\[
+t_{\text{held}}=2.5\times T_{\text{cycle}}
+\]
+
+or the configured `max_hold_time`, and Order Book Imbalance turns against the position:
+
+\[
+OBI<-0.45
+\]
+
+the bot must move the TP toward entry price to perform a Break-Even Scratch.
+
+The original example includes moving the TP from 0.2224 toward 0.2222 or 0.2223.
+
+---
+
+## 7. PROBLEM 3 — STEP-BOX MIGRATION VS TEMPORARY MISH-MASH
+
+The bot must distinguish genuine barcode migration from temporary retail noise.
+
+Example upward migration:
+
+\[
+[0.2222,0.2224]\rightarrow[0.2226,0.2228]
+\]
+
+Example downward migration:
+
+The corresponding lower barcode range must be identified and processed using the reverse logic.
+
+### Four Required Step-Migration Inputs
+
+Calculate the upward and downward migration signals using:
+
+1. **Multi-Level Book Pressure**
+
+\[
+\ln\left(
+\frac{Bid_{L0}+0.5Bid_{L1}}
+{Ask_{L0}+0.3Ask_{L1}}
+\right)
+\]
+
+2. **Wall Erosion Velocity**
+
+Identify whether more than 65% of the target Ask wall has disappeared within 250 milliseconds.
+
+3. **Hawkes Order-Flow Surge**
+
+Track exponential aggressive market-order intensity using the Hawkes process.
+
+4. **L2 Vacuum Above the Ceiling**
+
+Determine whether the next resistance levels above the current ceiling are disappearing or whether new walls are forming at 0.2226 and 0.2228.
+
+The architecture must specify the complete calculation of `Z_up` and `Z_down`, using the provided inputs and any justified mathematical details available from the reference architecture.
+
+Do not invent unverified coefficients and present them as original requirements.
+
+### Three-Tier Action Matrix
+
+**Tier 1 — Temporary Mish-Mash**
+
+Required warning range:
+
+\[
+1.15\leq Z_{\text{up}}<1.85
+\]
+
+provided the next tick reveals a strong absorption wall.
+
+Action:
+
+- Do not panic-close existing positions.
+- Pause new resting entries in the affected direction.
+- Continue observing the price.
+- Wait for the original barcode structure to recover.
+
+This behavior must also work for downward temporary disturbances.
+
+**Tier 2 — Confirmed Upward Box Migration**
+
+Required condition:
+
+\[
+Z_{\text{up}}\geq1.85
+\]
+
+When the upward migration is confirmed:
+
+1. Immediately cancel the unfilled Short entry at the old ceiling.
+2. If a Short is open at the old ceiling, attempt the specified IOC Buy scratch.
+3. Trail an existing Long TP from the old ceiling to the new box top, such as 0.2226 or 0.2228.
+4. Re-anchor the barcode coordinates to the new range.
+5. Begin a new barcode cycle.
+
+**Downward Migration**
+
+Apply the reverse procedure using `Z_down ≥ 1.85`:
+
+1. Cancel the unfilled Long entry at the old floor.
+2. Scratch the existing Long using IOC Sell.
+3. Trail the Short TP downward.
+4. Re-anchor the box to the lower range.
+5. Begin the new barcode cycle.
+
+The requested migration behavior must be preserved without silently changing its execution sequence.
+
+---
+
+## 8. PROBLEM 4 — MARK-PRICE LIQUIDATION GUARD AND HARD STOP
+
+### 8.1 Mark-Price vs Last-Price Basis Guard
+
+The bot must distinguish Last Price, Mid Price and Mark Price.
+
+Example:
+
+- Last Price: 0.5935.
+- Mark Price: 0.5942.
+
+Liquidation risk must be evaluated using Mark Price rather than relying solely on Last Price.
+
+Check Mark Price every second.
+
+The required basis calculation is:
+
+\[
+B_{\text{mark}}=
+\frac{|MarkPrice-MidPrice|}{MidPrice}
+\]
+
+If the divergence exceeds:
+
+\[
+0.15\%=15bps
+\]
+
+the bot must pause new 100x orders.
+
+### 8.2 Hard Emergency Stop-Loss
+
+When a sudden price movement crosses the specified emergency boundary:
+
+- Two ticks outside the box, or
+- 1.5 times the box width,
+
+the bot must immediately attempt to close the affected position using IOC execution.
+
+Both LONG and SHORT emergency handling must be covered.
+
+---
+
+## 9. NANOSECOND HARDWARE AND SPECULATIVE EXECUTION OBJECTIVES
+
+These are explicit engineering targets and design requirements of the project.
+
+### 9.1 Four-Core Pinned Thread-Per-Core Architecture
+
+The requested architecture uses:
+
+- `isolcpus`
+- `SCHED_FIFO` priority 99
+- `mlockall`
+- Pinned execution threads.
+
+**Core 1 — Network Ingress**
+
+Responsibilities:
+
+- Non-blocking sockets.
+- `SO_BUSY_POLL=50`.
+- `TCP_NODELAY=1`.
+- 4 MB socket buffers.
+- Zero-allocation byte parsing.
+- BingX GZIP stack decompression.
+
+**Core 2 — Hot Quant and Execution Brain**
+
+Responsibilities:
+
+- Wait-Free SPSC Ring Buffer consumption.
+- Queue hazard calculations.
+- Hawkes process calculations.
+- Step-Shift Tensor calculations.
+- Execution-state decisions.
+- Target internal processing below 100 nanoseconds.
+
+**Core 3 — Speculative TX Socket Dispatcher**
+
+Responsibilities:
+
+- Pre-warmed TLS/WebSocket connections.
+- Order dispatch.
+- Pre-allocated order payloads.
+- Speculative execution preparation.
+
+**Core 4 — Full-Market Barcode Scanner**
+
+Responsibilities:
+
+- Scan all supported exchange pairs.
+- Evaluate all specified barcode timeframes.
+- Identify the best candidates.
+- Send qualified candidates to Core 2.
+
+### 9.2 Silicon Clock and Cache Warming
+
+Use the CPU `_rdtsc()` register as the requested high-resolution internal timing mechanism.
+
+The original design target is approximately 2.4 nanoseconds per clock-related operation.
+
+During quiet 5–60-second barcode cycles, Core 2 should execute a dummy cache-warmup tick every 100 microseconds.
+
+The target is to prevent avoidable cold-cache and branch-prediction overhead.
+
+### 9.3 Fixed-Point Integer Mathematics
+
+Retrieve each instrument's:
+
+- `tick_size`
+- `step_size`
+
+Convert prices into integer ticks:
+
+\[
+PriceTicks=round\left(\frac{price}{tick\_size}\right)
+\]
+
+Use `u64` integer tick representations for the required internal price calculations.
+
+Avoid floating-point precision errors in price and quantity normalization.
+
+### 9.4 Pre-Allocated Byte Patching
+
+Do not use `serde_json::to_string` in the requested hot order-generation path.
+
+Prepare pre-allocated byte arrays and patch only the required price and `clientOrderId` fields in place.
+
+The original target for the relevant operation is approximately 11 nanoseconds.
+
+### 9.5 Speculative TCP Last-Byte Withholding
+
+When queue position approaches zero or a Step-Shift warning appears:
+
+- Prepare the order frame in advance.
+- Stage the first N-1 bytes.
+- Release the final byte (`}`) when the required trigger is confirmed.
+
+This is an explicitly requested technique. Its compatibility with TLS, WebSocket framing, TCP buffering and exchange protocols must be technically verified before implementation is recommended.
+
+### 9.6 Four-Subaccount API-Key Sharding
+
+Use the requested four API keys per exchange.
+
+The specified strategy is Round-Robin Token Bucket distribution to manage order submissions and cancellations and prevent rate-limit exhaustion.
+
+The architecture must verify the exchange-specific account, IP, endpoint and shared-limit rules. It must not assume that additional keys automatically multiply the available rate limits.
+
+---
+
+## 10. COMPLETE LIVE EXCHANGE INTEGRATION
+
+All four exchanges must have dedicated, exchange-specific implementations.
+
+### 10.1 Binance USDⓈ-M
+
+Requested endpoints:
+
+- `fstream.binance.com`
+- `ws-fapi.binance.com`
+
+Required capabilities:
+
+- L2 depth.
+- AggTrade.
+- Mark Price.
+- `listenKey` User Stream.
+- Private order and fill events.
+- GTX Maker orders.
+- IOC emergency orders.
+- Hedge Mode LONG and SHORT.
+- Exchange-compatible order lifecycle.
+
+### 10.2 Bybit V5 Linear
+
+Requested endpoints:
+
+- `stream.bybit.com/v5/public/linear`
+- `/v5/private`
+- `/v5/trade`
+
+Required capabilities:
+
+- L2 order book.
+- Public Trade.
+- Tickers.
+- Private Execution.
+- V5 Trade WebSocket.
+- PostOnly.
+- IOC.
+- Hedge Mode `positionIdx: 1` and `positionIdx: 2`.
+
+### 10.3 BingX Swap V2
+
+Requested endpoint:
+
+- `open-api-swap.bingx.com/swap-market`
+
+Required capabilities:
+
+- Stack GZIP decompression using the requested `flate2` approach.
+- Immediate Pong response to Ping.
+- L2 data.
+- Trade data.
+- Mark Price.
+- `/openApi/swap/v2/trade/order`.
+- PostOnly and IOC execution.
+
+### 10.4 MEXC Futures V1
+
+Requested endpoints:
+
+- `wss://contract.mexc.com/edge`
+- `/api/v1/private/order/submit`
+
+Required capabilities:
+
+- Numeric side codes 1–4.
+- `type: 2` Post-Only Maker.
+- `type: 3` IOC.
+- `openType: 1` Isolated Margin.
+- Hedge Mode.
+- Maker-fee optimization, including verification of the requested 0% Maker Fee assumption.
+
+The architecture must preserve the exchange-specific protocol distinctions. It must not force all four exchanges into an identical request format.
+
+### 10.5 Exchange Documentation Verification
+
+The supplied endpoints and protocol descriptions are the project's requested starting specifications.
+
+Verify the actual supported endpoints, authentication, signing, message formats, order parameters, rate limits, position-mode behavior, supported order flags, precision requirements and connection lifecycle against the relevant official exchange documentation.
+
+Document any discrepancies without silently changing the original project goal.
+
+---
+
+## 11. FINAL ENGINEERING EXPECTATIONS
+
+The eventual implementation must be:
+
+- Fully written in Rust.
+- End-to-end functional.
+- Connected to real supported exchange environments.
+- Capable of the specified live trading behavior.
+- Free of fake implementations.
+- Free of `todo!()` placeholders.
+- Free of disconnected or nonfunctional modules.
+- Properly integrated across its internal systems.
+
+Every implemented module must pass:
+
+```bash
+cargo check
+cargo test
+```
+
+Zero compiler errors and genuine test coverage are required.
+
+The final software must not be declared production-ready merely because it compiles.
+
+---
+
+# PART 2 — ARCHITECTURE DESIGN TASK FOR THE AI
+
+## 12. YOUR ACTUAL ASSIGNMENT
+
+You are NOT being asked to enhance, rewrite, modify or improve the project goal.
+
+**The project goal in PART 1 is already enhanced and finalized.**
+
+Your entire assignment is to study that final goal and create a completely new, substantially more comprehensive and technically superior system architecture that can fully realize it.
+
+The second input supplied to you is:
+
+`complete_hft_barcode_system_architecture.md`
+
+This is the existing architecture reference document.
+
+It is an incomplete/basic architecture relative to the full engineering depth and implementation completeness required by the project.
+
+Do not assume that it is complete simply because it is lengthy or contains equations, diagrams, Rust code examples or technical terminology.
+
+It is NOT the final architecture.
+
+## 13. CREATE AN ENTIRELY NEW ARCHITECTURE FROM SCRATCH
+
+This is a mandatory instruction.
+
+You must:
+
+1. Independently design a new architecture from the finalized project goal.
+2. Examine the entire existing architecture document, not just its summary or introductory sections.
+3. Identify every useful concept, calculation, mechanism and component in the existing architecture.
+4. Technically evaluate whether each useful concept is correct, complete and suitable.
+5. Reuse genuinely valuable concepts where justified.
+6. Identify missing modules, systems, workflows, dependencies, interfaces and engineering layers.
+7. Design everything necessary for a complete implementation-ready architecture.
+
+You must NOT:
+
+- Edit the existing architecture.
+- Overwrite the existing architecture.
+- Rename the existing architecture and present it as a new design.
+- Merely expand its existing headings.
+- Simply rearrange its directory tree.
+- Copy its Rust snippets and call that a complete architecture.
+- Treat its existing design decisions as automatically correct.
+
+Create a separate architecture document with its own independently designed structure.
+
+The original project goal remains the primary authority.
+
+The existing architecture is only a secondary reference.
+
+## 14. TARGET THE HIGHEST LEVEL OF ARCHITECTURAL ENGINEERING
+
+Use your maximum available reasoning, research, analytical and technical capabilities.
+
+Do not produce an ordinary trading-bot architecture.
+
+The objective is an exceptionally advanced, deeply engineered, institutional-grade, production-ready architecture for this exact project.
+
+Do not artificially limit the depth of your work because the existing architecture is already large.
+
+Do not sacrifice completeness for brevity.
+
+Do not artificially complicate the design either. Every subsystem, optimization and advanced technique must have a genuine engineering purpose, technically defensible justification and clear relationship to the project goal.
+
+The goal is not to create an impressive-looking document. The goal is to create an architecture that can actually be implemented, tested, operated and maintained in production.
+
+## 15. COMPLETE SYSTEM AND SUBSYSTEM DESIGN
+
+Design the architecture across every necessary engineering layer.
+
+At minimum, investigate and specify the following areas in the context of the finalized goal:
+
+### A. Overall System Architecture
+
+- Complete system structure.
+- Architectural principles.
+- Major subsystems and their boundaries.
+- Execution topology.
+- Module relationships.
+- Internal communication.
+- Component responsibilities.
+- Complete system lifecycle.
+
+### B. Market Data Infrastructure
+
+- Exchange connections.
+- Public WebSocket streams.
+- Private WebSocket streams.
+- Market-data ingestion.
+- Message decoding.
+- Data normalization.
+- Sequence and update tracking.
+- Order-book construction.
+- Data integrity.
+- Timestamp handling.
+- Disconnection and reconnection.
+- Stale and missing market data handling.
+
+### C. Barcode Detection and Quantitative Engine
+
+- All specified barcode signatures.
+- Multi-timeframe evaluation.
+- Rolling data structures.
+- EMA calculations.
+- Markov transition logic.
+- Green/Red symmetry.
+- Volume consistency.
+- Box floor and ceiling calculations.
+- Barcode ranking.
+- Step migration.
+- Temporary mish-mash differentiation.
+- Hawkes process.
+- Order-book pressure calculations.
+- Mathematical consistency and validation.
+
+### D. Execution and Order Management
+
+- Normal Maker entry.
+- Post-Only enforcement.
+- TP placement.
+- IOC emergency execution.
+- Queue-position estimation.
+- Queue depletion tracking.
+- Adverse-selection cancellation.
+- Partial fills.
+- Multiple fills.
+- Order amendments.
+- Order cancellation.
+- Duplicate-order prevention.
+- Client order IDs.
+- Exchange order acknowledgements.
+- Order-state reconciliation.
+- Hedge Mode position tracking.
+- Continuous ping-pong lifecycle.
+
+### E. Hardware and Performance Architecture
+
+- Core allocation.
+- Thread affinity.
+- CPU scheduling.
+- Memory allocation.
+- Lock-free communication.
+- Cache behavior.
+- Clock synchronization.
+- NIC and socket configuration.
+- Packet parsing.
+- Fixed-point arithmetic.
+- Order serialization.
+- Network latency measurement.
+- Internal latency measurement.
+- Benchmarking.
+
+### F. Risk and Capital Protection
+
+Implement every risk-related requirement in PART 1 and specify its exact interactions with the execution engine.
+
+Include the full behavior of:
+
+- Mark Price guard.
+- Leverage configuration.
+- Isolated Margin.
+- Emergency stops.
+- Step migration.
+- Adverse selection.
+- Position-size calculations.
+- Order failures.
+- Exchange disconnects.
+- Incorrect or incomplete account state.
+
+Do not invent new trading strategies or silently change the original risk conditions.
+
+### G. Exchange Adapter Architecture
+
+Create four dedicated exchange adapters.
+
+Each adapter must specify:
+
+- Connection lifecycle.
+- Authentication.
+- Signing.
+- Public streams.
+- Private streams.
+- Market-data mapping.
+- Order request mapping.
+- Order response mapping.
+- Position mapping.
+- Precision conversion.
+- Error mapping.
+- Rate limits.
+- Reconnection logic.
+- Exchange-specific restrictions.
+- Compatibility with the shared internal execution engine.
+
+### H. Internal State and Data Management
+
+Specify:
+
+- Every important internal state.
+- State ownership.
+- State transitions.
+- Data structures.
+- Persistent records where required.
+- State recovery.
+- Event ordering.
+- Position reconciliation.
+- Order reconciliation.
+- Startup recovery.
+- Restart behavior.
+- Duplicate and out-of-order event handling.
+
+### I. Security and Operational Infrastructure
+
+Specify all necessary production engineering for:
+
+- Credential protection.
+- API-key handling.
+- Secret management.
+- Permissions.
+- Secure communication.
+- Resource isolation.
+- Process supervision.
+- Health checks.
+- Metrics.
+- Structured logging.
+- Distributed diagnostics where needed.
+- Error reporting.
+- Backup and recovery.
+- Configuration management.
+- Deployment.
+- Rollback.
+- Operational monitoring.
+
+### J. Testing and Verification
+
+Define:
+
+- Unit tests.
+- Mathematical property tests.
+- Integration tests.
+- Exchange adapter tests.
+- Protocol tests.
+- Order lifecycle tests.
+- State-machine tests.
+- Failure-injection tests.
+- Load tests.
+- Latency benchmarks.
+- Concurrency tests.
+- Recovery tests.
+- Live test-environment validation.
+- Production-readiness acceptance tests.
+
+Explain precisely how each major subsystem can be proven correct.
+
+## 16. BEGINNER-DEVELOPER IMPLEMENTATION STANDARD
+
+This is one of the most important requirements.
+
+The final architecture must be so comprehensive, explicit and understandable that it can be handed to a beginner-level Rust developer as the primary engineering blueprint.
+
+That developer should be able to implement the entire system by following the architecture without having to guess missing design decisions.
+
+For every major subsystem and module, document:
+
+1. Its exact purpose.
+2. Why it is required.
+3. Its internal responsibilities.
+4. How it works.
+5. Its input data.
+6. Its output data.
+7. Its dependencies.
+8. Which modules use it.
+9. Which modules it depends on.
+10. Its exact communication interfaces.
+11. Its state and lifecycle.
+12. Its algorithms and formulas.
+13. Its error-handling behavior.
+14. Its failure and recovery behavior.
+15. Its configuration requirements.
+16. Its implementation sequence.
+17. Its testing requirements.
+18. Its acceptance criteria.
+
+Avoid vague instructions such as:
+
+- Implement a robust engine.
+- Add appropriate error handling.
+- Optimize performance.
+- Use a reliable data structure.
+- Make the module production-ready.
+
+Explain EXACTLY what must be built, how the components communicate, what data they exchange, how they behave in different situations and how their correctness is verified.
+
+Use technical diagrams, sequence diagrams, state diagrams, data-flow diagrams, interface specifications, tables, pseudocode and practical examples wherever necessary.
+
+## 17. MATHEMATICAL AND PERFORMANCE VERIFICATION
+
+Do not create impressive-looking but unsupported numbers or equations.
+
+All important calculations must be technically justified.
+
+For every mathematical formula:
+
+- Define each variable.
+- Explain its meaning.
+- Specify units.
+- Explain the calculation sequence.
+- Define boundary conditions.
+- Address division-by-zero and invalid input.
+- Provide numerical examples.
+- Explain how the result affects trading decisions.
+- Define how the calculation will be tested.
+
+For performance requirements, separately define:
+
+- Internal computation latency.
+- Inter-thread communication latency.
+- Market-data reception latency.
+- Network transmission latency.
+- Exchange acknowledgement latency.
+- Actual matching-engine execution latency.
+- Fill-notification latency.
+
+Do not confuse a local nanosecond computation target with a real exchange execution guarantee.
+
+Clearly distinguish:
+
+- User-specified requirements.
+- Theoretical performance targets.
+- Measurable engineering targets.
+- Officially documented exchange behavior.
+- Experimentally measured results.
+- Unverified assumptions.
+
+If a requested technique is impossible, unsupported or incompatible with a specific exchange, explain the reason and document the technically viable implementation options.
+
+Never silently remove the requested behavior.
+
+## 18. CONFLICTS, MISSING DETAILS AND TECHNICAL UNCERTAINTIES
+
+Carefully inspect the original goal and existing architecture for:
+
+- Contradictory equations.
+- Different thresholds.
+- Inconsistent timing examples.
+- Missing mathematical coefficients.
+- Undefined variables.
+- Unsupported exchange parameters.
+- Conflicting state transitions.
+- Incorrect protocol assumptions.
+- Unsupported hardware claims.
+- Incomplete execution sequences.
+
+The project goal must not be rewritten or silently modified to make the architecture easier.
+
+When a conflict exists:
+
+1. Show the exact conflicting requirements.
+2. Explain why they conflict.
+3. Identify which values came from the finalized goal.
+4. Identify which values came from the existing architecture.
+5. Explain the consequences.
+6. Provide a technically justified resolution proposal.
+7. Preserve unresolved decisions in an explicit decision register rather than inventing an arbitrary answer.
+
+Where practical, design configurable implementations that preserve both original constraints until the conflicting decision is resolved.
+
+## 19. DEPENDENCY AND IMPLEMENTATION ORDER
+
+Do not organize the architecture only by apparent module importance.
+
+Determine the actual engineering dependency order.
+
+For every module:
+
+- Identify prerequisites.
+- Identify downstream dependencies.
+- Explain why it must be implemented at that stage.
+- Specify the exact interface required by the next module.
+- Identify what must be completed before integration.
+- Define its build and test gates.
+
+Provide a complete dependency graph and an implementation roadmap from the first foundational component to the complete production system.
+
+Avoid circular dependencies and unnecessary coupling.
+
+## 20. COMPLETE PROJECT STRUCTURE AND MODULE SPECIFICATIONS
+
+Design a complete Rust project directory structure.
+
+For every directory and important file, explain:
+
+- Why it exists.
+- Which subsystem owns it.
+- What responsibilities it contains.
+- Which other files or modules it depends on.
+- Which public interfaces it exposes.
+- How it is tested.
+
+Specify appropriate dependency boundaries and Rust crate organization.
+
+Do not choose libraries merely because they are popular. Justify critical dependency selections against the actual requirements of the system.
+
+## 21. TRACEABILITY — EVERY GOAL REQUIREMENT MUST BE ACCOUNTED FOR
+
+Create a comprehensive requirement-to-architecture traceability matrix.
+
+Every requirement in PART 1 must map to:
+
+- Its unique requirement ID.
+- The original requirement.
+- Its architecture section.
+- Its responsible subsystem.
+- Its responsible module.
+- Its implementation workflow.
+- Its testing method.
+- Its acceptance criteria.
+- Its validation status.
+
+No requirement may disappear simply because it is difficult or complicated.
+
+The matrix must cover all four exchanges, all barcode signatures, all four execution stages, all step-migration behaviors, all hardware objectives, all mathematical requirements and all emergency conditions.
+
+## 22. PRODUCTION-READINESS AUDIT
+
+Before declaring the architecture complete, conduct a full self-audit.
+
+Check:
+
+- Whether every original requirement is covered.
+- Whether all modules have explicit responsibilities.
+- Whether all dependencies are documented.
+- Whether all interfaces are specified.
+- Whether data can flow through the entire system.
+- Whether all order states are accounted for.
+- Whether position state remains correct after partial fills and disconnects.
+- Whether every major failure scenario has a defined response.
+- Whether every performance claim has a measurement method.
+- Whether every exchange implementation has been verified.
+- Whether the architecture can actually guide a beginner developer.
+
+Identify incomplete areas honestly.
+
+Do not claim 100% production readiness without evidence.
+
+## 23. FINAL DELIVERABLE
+
+Produce a completely new and independent architecture document.
+
+It must be the primary engineering blueprint for implementing the entire finalized project goal.
+
+The final document must include:
+
+1. Complete executive architecture.
+2. System-wide architecture diagrams.
+3. All systems and subsystems.
+4. Complete module specifications.
+5. Mathematical and quantitative specifications.
+6. Hardware and network architecture.
+7. Four exchange-specific integration architectures.
+8. Market-data architecture.
+9. Barcode detection architecture.
+10. Bi-directional execution architecture.
+11. Queue and order-management architecture.
+12. Step-migration architecture.
+13. Risk and emergency execution architecture.
+14. State and data-management specifications.
+15. Exact inter-module contracts.
+16. Complete project directory structure.
+17. Dependency graph.
+18. Implementation roadmap.
+19. Testing and acceptance specifications.
+20. Security and operational architecture.
+21. Failure handling and recovery procedures.
+22. Performance budgets and benchmarks.
+23. Complete requirement traceability matrix.
+24. Architecture decision and unresolved-issue registers.
+25. Final production-readiness audit.
+
+The architecture must be detailed enough to serve as an implementation specification, not merely an overview.
+
+---
+
+# FINAL NON-NEGOTIABLE INSTRUCTIONS
+
+1. PART 1 is the finalized project goal. Do not rewrite, enhance, simplify, replace or modify it.
+2. Your responsibility is to design and enhance the ARCHITECTURE, not the goal.
+3. The supplied existing architecture is an incomplete/basic reference, not the final design.
+4. Do not edit or overwrite that existing architecture file.
+5. Build a completely new architecture from scratch in a separate document.
+6. Reuse technically valuable existing concepts only after independent verification.
+7. Do not remove any original project requirement silently.
+8. Do not invent unsupported mathematical formulas or hardware capabilities.
+9. Do not produce a generic trading-bot blueprint.
+10. Do not prioritize document brevity over engineering completeness.
+11. Do not leave vague module descriptions or undocumented implementation decisions.
+12. Use all available analytical, research and technical capabilities to produce the strongest possible architecture.
+13. Research official exchange documentation and relevant technical specifications when available. Cite sources and identify the date/version of verified information.
+14. Validate all architectural dependencies and ensure that the entire system forms one coherent, implementable design.
+15. Do not begin writing the software implementation instead of completing the requested architecture.
+
+**FINAL MISSION: Transform the finalized project goal into an exceptionally comprehensive, technically justified, independently designed, institutional-grade production architecture that a beginner Rust developer can follow to build the entire system correctly, module by module, without guessing how anything works or connects.**
